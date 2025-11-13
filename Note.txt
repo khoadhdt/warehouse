@@ -1,0 +1,39 @@
+# Câu trúc chính của ứng dụng quản lý kho hàng
+"""
+Câu trúc file xây dựng ứng dụng quản lý kho hàng sử dụng PySide6 cho giao diện người dùng và SQLAlchemy cho kết nối cơ sở dữ liệu PostgreSQL.
+warehouse_app/
+│
+├── config/
+│   └── settings.py             # Cấu hình DB, paths, groups, table names
+│── db/
+│   ├── __init__.py
+│   ├── database.py             # Kết nối DB, session management
+│   ├── models.py               # Định nghĩa các model SQLAlchemy
+|   └── sync_wrappers.py        # Các hàm đồng bộ bọc quanh các hàm async nếu cần
+|── utils/
+│   ├── __init__.py
+│   ├── helpers.py              # Các hàm tiện ích dùng chung
+│   └── constants.py            # Các bộ sở dữ liệu dùng chung
+│── modules/
+│   ├── __init__.py
+│   ├── auth.py                 # Login, user, role management
+|   ├── team.py               # Quản lý nhóm người dùng
+|   ├── images.py               # Xử lý ảnh (lưu trữ, tải lên)
+|   ├── inventory.py            # Quản lý kho (nhập, xuất, điều chỉnh)
+|   ├── options.py              # Quản lý các tùy chọn (categories, units)
+|   └── search.py               # Tìm kiếm, autocomplete
+│   ├── ui/
+│   │   ├── __init__.py
+│   │   ├── login.py          # Giao diện và logic đăng nhập
+│   │   ├── input_tab.py      # Giao diện và logic tab nhập kho
+│   │   ├── output_tab.py     # Giao diện và logic tab xuất kho           
+│   │   └── inventory_tab.py  # Giao diện và logic tab quản lý kho
+│   └── inventory.py           # Logic nhập/xuất/adjustment kho
+│── ui/
+│   ├── __init__.py
+│   └── screen_InventoryManager.py  # File UI chính (tạo từ Qt Designer)
+│── __init__.py
+└── main.py                    # File khởi động ứng dụng
+
+
+
