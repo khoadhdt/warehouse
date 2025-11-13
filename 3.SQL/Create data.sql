@@ -223,7 +223,7 @@ BEGIN
         modinvoice TEXT,
         status TEXT,
         note TEXT,
-        quantity NUMERIC(12, 3) NOT NULL CHECK (quantity > 0),
+        quantity INTEGER NOT NULL CHECK (quantity > 0),
         movement_type VARCHAR(20) NOT NULL DEFAULT 'adjustment'
             CHECK (movement_type IN ('in', 'out', 'adjustment')),
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
@@ -337,9 +337,31 @@ HAVING SUM(CASE WHEN ie.movement_type = 'out' THEN -ie.quantity ELSE ie.quantity
 CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_current_stock_unique
 ON current_stock (team_id, component_id);
 
+
+-- THÊM CÁC FUNCTION
 -- Xoa bang options va reset id
 TRUNCATE TABLE inventory_entries RESTART IDENTITY CASCADE;
 TRUNCATE TABLE audit_log RESTART IDENTITY CASCADE;
 TRUNCATE TABLE teams RESTART IDENTITY CASCADE;
 TRUNCATE TABLE options RESTART IDENTITY CASCADE;
 TRUNCATE TABLE users RESTART IDENTITY CASCADE;
+
+-- 1. Kiểm tra index
+SELECT indexname, indexdef
+FROM pg_indexes
+WHERE tablename = 'current_stock' AND indexname = 'idx_current_stock_unique';
+
+-- 2. Refresh concurrent (đảm bảo không lỗi)
+REFRESH MATERIALIZED VIEW CONCURRENTLY current_stock;
+
+-- Tạo index cho tìm kiếm nhanh theo prefix
+CREATE INDEX IF NOT EXISTS idx_inventory_entries_component_id_prefix 
+ON inventory_entries (component_id);
+
+-- Tối ưu hơn: index cho 6 ký tự đầu (prefix)
+CREATE INDEX IF NOT EXISTS idx_inventory_entries_component_id_prefix6 
+ON inventory_entries (LEFT(component_id, 6));
+
+ALTER TABLE options 
+ADD CONSTRAINT IF NOT EXISTS unique_team_category_value 
+UNIQUE (team_id, category, value);
