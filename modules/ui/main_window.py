@@ -11,6 +11,10 @@ from config.settings import SOFTWARE_TITLE
 import os
 from config.global_vars import get_folders
 import subprocess
+import asyncio
+from modules.options import get_all_categories  # ← Đảm bảo import
+
+_OPTIONS_CACHE: dict = {}
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -46,6 +50,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.statusBar.addPermanentWidget(btn_open_invoice)  # ← PHẢI
 
+        # === 3. TẠO LABEL ZOOM ẢNH Ở GIỮA MÀN HÌNH ===
+        # centralwidget là widget trung tâm
+        self.images_zoom_label = QLabel(self.centralwidget)
+        self.images_zoom_label.setObjectName("images_zoom_label")
+        self.images_zoom_label.setAlignment(Qt.AlignCenter)
+        self.images_zoom_label.setScaledContents(True)  # Tự động co giãn ảnh
+        self.images_zoom_label.setMinimumSize(300, 300)
+        self.images_zoom_label.setStyleSheet("""
+            QLabel {
+                background-color: rgba(255, 255, 255, 0.9);
+                border: 1px solid #3B82F6;
+                border-radius: 10px;
+                padding: 6px;
+            }
+        """)
+        # self.images_zoom_label.hide()  # Ẩn ban đầu
+
         # === 2. ẨN TAB THEO ROLE ===
         tab_widget: QTabWidget = self.tabWidget_main  # ← tên tabWidget trong .ui
 
@@ -69,12 +90,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         team_id = user_info.get("team_id")
         user_id = user_info.get("id")
 
+        # === LOAD OPTIONS 1 LẦN DUY NHẤT ===
+        try:
+            loop = asyncio.get_event_loop()
+            self.options = loop.run_until_complete(
+                self.load_categories_once(team_id))
+        except Exception as e:
+            print(f"[ERROR] Không thể load options: {e}")
+            self.options = {}
+
+        # === KHỞI TẠO INPUT TAB VỚI OPTIONS ===
         self.input_tab_controller = InputTabController(
             ui=self,
             team_id=team_id,
             user_id=user_id,
-            username=user_info["username"],
-            db_handler=db_handler
+            username=username,
+            db_handler=DatabaseHandler(),
+            options=self.options  # ← TRUYỀN VÀO
         )
         self.input_tab_controller.search_items()
 
@@ -89,7 +121,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # )
         # self.output_tab_controller.load_output_table()
 
-        # # TẠO INVENTORY
+        # TẠO INVENTORY
         # self.inventory_controller = InventoryTabController(
         #     ui=self,
         #     team_id=team_id,
@@ -158,3 +190,55 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         # Bước 4: Trường hợp không có "-" hoặc "_", trả về nguyên chuỗi đã được strip
         return text.strip()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, 'images_zoom_label'):
+            # Căn giữa label theo centralwidget
+            self.center_zoom_label()
+
+    def center_zoom_label(self):
+        if not self.images_zoom_label.isVisible():
+            return
+        rect = self.centralwidget.geometry()
+        label_size = self.images_zoom_label.sizeHint()
+        x = (rect.width() - label_size.width()) // 2
+        y = (rect.height() - label_size.height()) // 2
+        self.images_zoom_label.move(x, y)
+
+    def show_zoomed_image(self, image_path: str):
+        if not os.path.exists(image_path):
+            return
+
+        pixmap = QPixmap(image_path)
+        if pixmap.isNull():
+            return
+
+        # Tính kích thước tối đa (80% màn hình)
+        max_size = self.centralwidget.size() * 0.8
+        scaled_pixmap = pixmap.scaled(
+            max_size, Qt.KeepAspectRatio, Qt.SmoothTransformation
+        )
+
+        self.images_zoom_label.setPixmap(scaled_pixmap)
+        self.images_zoom_label.resize(scaled_pixmap.size())
+        self.images_zoom_label.show()
+        self.center_zoom_label()
+
+        # Click để đóng
+        self.images_zoom_label.mousePressEvent = lambda e: self.hide_zoomed_image()
+
+    def hide_zoomed_image(self):
+        self.images_zoom_label.hide()
+        self.images_zoom_label.clear()
+
+    async def load_categories_once(self, team_id: int):
+        """Chỉ query DB 1 lần duy nhất cho mỗi team"""
+        global _OPTIONS_CACHE
+        if team_id not in _OPTIONS_CACHE:
+            try:
+                _OPTIONS_CACHE[team_id] = await get_all_categories(team_id)
+            except Exception as e:
+                print(f"[ERROR] load_categories_once: {e}")
+                _OPTIONS_CACHE[team_id] = {}
+        return _OPTIONS_CACHE[team_id]
